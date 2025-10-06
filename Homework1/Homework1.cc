@@ -6,6 +6,7 @@ using std:: endl;
 using std:: vector;
 #include<pthread.h>
 #include<semaphore.h>
+#include<unistd.h>
 
 struct shared { // make a shared struct so that you can pass in all of these values
   long global_count= 0; // to the pthread_create()
@@ -19,9 +20,27 @@ struct shared { // make a shared struct so that you can pass in all of these val
   sem_t mutex;
 };
 
+struct targs {
+  shared* sh;
+  int index;
+}
+
 void* do_work(void* arg) {
-  shared* sh = (shared*) arg;
-  //continue code here
+  targs* ta = (targs*) arg;
+
+  long increments = ta->sh->work_time*1000000
+  if(ta->sh->cpu_bound) {
+    for (long i = 0; i < increments; ++i)//NOT SURE IF THIS AMOUNT OF INCRIMINTATION IS WRONG
+      ;//wait
+    ++ta->sh->local_buckets[ta->index];
+  } else {
+    usleep(increments);// NOT SURE IF THIS AMOUNT OF TIME IS WRONG
+  }
+  if(ta->sh->local_buckets[ta->index] == ta->sh->sloppiness) {
+    sem_wait(&(ta->sh->mutex));
+    ta->sh->global_count = ta->sh->local_buckets[ta->index]; // maybe how you do it?????
+  }
+  sem_post(&(ta->sh->mutex));
 }
 
 int main(int argc, char* argv[]) {
@@ -42,14 +61,19 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   sem_init(&sh.mutex,0,1);
-
-  pthread_t threads[sh.n_threads];
   for (int i = 0; i < sh.n_threads; ++i) {
     sh.local_buckets.push_back(0);
   }
 
-  for(int i = 0; i < work_iteration; ++i) {
-    pthread_create(&threads[i],NULL,do_work,&sh);
+  targs all_targs[n_threads];
+  for (int i = 0; i< sh.n_threads; ++i) {
+    all_targs[i].sh=&sh;
+    all_targs[i].index = i;
+  }
+  pthread_t threads[sh.n_threads];
+
+  for(int i = 0; i < sh.work_iteration; ++i) {
+    pthread_create(&threads[i],NULL,do_work,&all_targs[i]);
   }
 
   return 0;
