@@ -8,8 +8,8 @@ using std:: vector;
 #include<semaphore.h>
 #include<unistd.h>
 
-struct shared { // make a shared struct so that you can pass in all of these values
-  long global_count= 0; // to the pthread_create()
+struct shared { // make a shared struct so all threads have same info to work with
+  long global_count= 0;
   int n_threads= 2;
   int sloppiness= 10;
   int work_time= 10;
@@ -20,27 +20,34 @@ struct shared { // make a shared struct so that you can pass in all of these val
   sem_t mutex;
 };
 
-struct targs {
-  shared* sh;
+struct targs { // make an additional struct so that you can differentiate the index of the buckets
+  shared* sh; // for each thread
   int index;
-}
+};
 
 void* do_work(void* arg) {
   targs* ta = (targs*) arg;
+  long* current_counter = new long;
+  *current_counter = 0;
+  long increments = ta->sh->work_time*1000000;
+  for (int i= 0; i < ta->sh->work_iteration; ++i) {
+    if(ta->sh->cpu_bound) {
+      for (long j = 0; j < increments; ++j)//NOT SURE IF THIS AMOUNT OF INCRIMINTATION IS WRONG
+        ;//wait
+      } else {
+        usleep(ta->sh->work_time*1000);// NOT SURE IF THIS AMOUNT OF TIME IS WRONG
+      }
+      ++ta->sh->local_buckets[ta->index];
+    if(ta->sh->local_buckets[ta->index] == ta->sh->sloppiness) {
+      sem_wait(&(ta->sh->mutex));
+      ta->sh->global_count += ta->sh->local_buckets[ta->index]; // maybe how you do it?????
+      ta->sh->local_buckets[ta->index] = 0;
+      sem_post(&(ta->sh->mutex));
+    }
+    *current_counter = ta->sh->global_count;
+  }
+  return  current_counter; //I HAVE NO CLUE WHAT THIS IS SUPPOSED TO RETURN
 
-  long increments = ta->sh->work_time*1000000
-  if(ta->sh->cpu_bound) {
-    for (long i = 0; i < increments; ++i)//NOT SURE IF THIS AMOUNT OF INCRIMINTATION IS WRONG
-      ;//wait
-    ++ta->sh->local_buckets[ta->index];
-  } else {
-    usleep(increments);// NOT SURE IF THIS AMOUNT OF TIME IS WRONG
-  }
-  if(ta->sh->local_buckets[ta->index] == ta->sh->sloppiness) {
-    sem_wait(&(ta->sh->mutex));
-    ta->sh->global_count = ta->sh->local_buckets[ta->index]; // maybe how you do it?????
-  }
-  sem_post(&(ta->sh->mutex));
 }
 
 int main(int argc, char* argv[]) {
@@ -65,16 +72,35 @@ int main(int argc, char* argv[]) {
     sh.local_buckets.push_back(0);
   }
 
-  targs all_targs[n_threads];
+  targs all_targs[sh.n_threads];
   for (int i = 0; i< sh.n_threads; ++i) {
     all_targs[i].sh=&sh;
     all_targs[i].index = i;
   }
-  pthread_t threads[sh.n_threads];
 
-  for(int i = 0; i < sh.work_iteration; ++i) {
-    pthread_create(&threads[i],NULL,do_work,&all_targs[i]);
+  pthread_t threads[sh.n_threads];
+    for (int j = 0; j < sh.n_threads; ++j) {
+      pthread_create(&threads[j],NULL,do_work,&all_targs[j]);
+    }
+  
+  if (sh.do_logging) {
+    int interval_ms = (sh.work_time * sh.work_iteration)/10;// divide the amount of total time worked by
+    for (int i = 0; i < 9; ++i) { // 10 to get 10 evenly sized chuncks of time
+      usleep(interval_ms*1000);
+      cout << "Global count: " << sh.global_count << " local buckets [";
+      for (int j = 0; j < sh.n_threads; ++j) {
+        cout << sh.local_buckets[j] << (j+1==sh.n_threads? "" : ", ");
+      }
+      cout << "]" << endl;
+    }
   }
+
+  for(int i = 0; i< sh.n_threads; ++i) {
+    pthread_join(threads[i],nullptr);
+  }
+
+    cout << "global count " << sh.global_count << endl;
+  //cout <<"this is the global count " <<  sh.global_count << endl;
 
   return 0;
 }
