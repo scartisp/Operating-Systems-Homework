@@ -37,7 +37,7 @@ void* do_work(void* arg) {
       for (long j = 0; j < increments; ++j)//NOT SURE IF THIS AMOUNT OF INCRIMINTATION IS WRONG
         ;//wait
       } else {
-        usleep(ta->sh->work_time*1000);// NOT SURE IF THIS AMOUNT OF TIME IS WRONG
+        usleep(dis(gen)*1000);// NOT SURE IF THIS AMOUNT OF TIME IS WRONG
       }
       ++ta->sh->local_buckets[ta->index];
     if(ta->sh->local_buckets[ta->index] == ta->sh->sloppiness) {
