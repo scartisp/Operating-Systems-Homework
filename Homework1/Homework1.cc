@@ -7,6 +7,7 @@ using std:: vector;
 #include<pthread.h>
 #include<semaphore.h>
 #include<unistd.h>
+#include<random>
 
 struct shared { // make a shared struct so all threads have same info to work with
   long global_count= 0;
@@ -27,10 +28,11 @@ struct targs { // make an additional struct so that you can differentiate the in
 
 void* do_work(void* arg) {
   targs* ta = (targs*) arg;
-  long* current_counter = new long;
-  *current_counter = 0;
-  long increments = ta->sh->work_time*1000000;
-  for (int i= 0; i < ta->sh->work_iteration; ++i) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(.5*ta->sh->work_time, 1.5*ta->sh->work_time);
+  for (int i = 0; i < ta->sh->work_iteration; ++i) {
+    long increments = dis(gen)*1000000;
     if(ta->sh->cpu_bound) {
       for (long j = 0; j < increments; ++j)//NOT SURE IF THIS AMOUNT OF INCRIMINTATION IS WRONG
         ;//wait
@@ -44,16 +46,15 @@ void* do_work(void* arg) {
       ta->sh->local_buckets[ta->index] = 0;
       sem_post(&(ta->sh->mutex));
     }
-    *current_counter = ta->sh->global_count;
   }
-  return  current_counter; //I HAVE NO CLUE WHAT THIS IS SUPPOSED TO RETURN
+  return  nullptr; //I HAVE NO CLUE WHAT THIS IS SUPPOSED TO RETURN
 
 }
 
 int main(int argc, char* argv[]) {
-  shared sh;
   using std:: string;
   using std:: stoi;
+  shared sh;
 
   try {
     if (argc > 1) sh.n_threads = stoi(argv[1]);
@@ -62,31 +63,38 @@ int main(int argc, char* argv[]) {
     if (argc > 4) sh.work_iteration = stoi(argv[4]);
     if (argc > 5 && string(argv[5]) == "true") sh.cpu_bound = true;
     if (argc > 6 && string(argv[6]) == "true") sh.do_logging = true;
-  } catch (const std:: exception& e) {
+  } catch (const std:: exception &e) {
     std::cerr << "invalid arguments. the order should be number of threads, sloppiness, " <<
     "work time,\nwork iterations, cpu bound (true or false), and then logging (true or false)." << endl;
     return 1;
   }
+
+  cout << "starting sloppy counter sim with:\nnumber of threads: " << sh.n_threads;
+  cout << "\nsoppiness: " << sh.sloppiness <<"\nwork time (in ms): " << sh.work_time;
+  cout << "\nwork iteration (per thread): " << sh.work_iteration << "\nCPU bound: ";
+  cout << sh.cpu_bound << "\nlogging: " << sh.do_logging << "\n" << endl;
+
+
   sem_init(&sh.mutex,0,1);
   for (int i = 0; i < sh.n_threads; ++i) {
     sh.local_buckets.push_back(0);
   }
 
   targs all_targs[sh.n_threads];
-  for (int i = 0; i< sh.n_threads; ++i) {
-    all_targs[i].sh=&sh;
-    all_targs[i].index = i;
-  }
-
+  // for (int i = 0; i< sh.n_threads; ++i) {
+  // }
+  
   pthread_t threads[sh.n_threads];
-    for (int j = 0; j < sh.n_threads; ++j) {
-      pthread_create(&threads[j],NULL,do_work,&all_targs[j]);
+  for (int i = 0; i < sh.n_threads; ++i) {
+      all_targs[i].sh=&sh;
+      all_targs[i].index = i;
+      pthread_create(&threads[i],NULL,do_work,&all_targs[i]);
     }
   
-  if (sh.do_logging) {
-    int interval_ms = (sh.work_time * sh.work_iteration)/10;// divide the amount of total time worked by
-    for (int i = 0; i < 9; ++i) { // 10 to get 10 evenly sized chuncks of time
-      usleep(interval_ms*1000);
+ if (sh.do_logging) {
+    cout << "displaying outcome every 1000 milisecond: " << endl;
+    for (int i = 0; i < 9; ++i) {
+      usleep(1000000);
       cout << "Global count: " << sh.global_count << " local buckets [";
       for (int j = 0; j < sh.n_threads; ++j) {
         cout << sh.local_buckets[j] << (j+1==sh.n_threads? "" : ", ");
@@ -97,10 +105,11 @@ int main(int argc, char* argv[]) {
 
   for(int i = 0; i< sh.n_threads; ++i) {
     pthread_join(threads[i],nullptr);
-  }
+    sh.global_count+= all_targs[i].sh->local_buckets[i];
+     all_targs[i].sh->local_buckets[i] = 0; // put anything that remains in the local buckets into
+  } // the global count, empty the buckets
 
     cout << "global count " << sh.global_count << endl;
-  //cout <<"this is the global count " <<  sh.global_count << endl;
 
   return 0;
 }
