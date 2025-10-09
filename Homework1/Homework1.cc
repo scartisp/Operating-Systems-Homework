@@ -42,12 +42,12 @@ void* do_work(void* arg) {
       ++ta->sh->local_buckets[ta->index];
     if(ta->sh->local_buckets[ta->index] == ta->sh->sloppiness) {
       sem_wait(&(ta->sh->mutex));
-      ta->sh->global_count += ta->sh->local_buckets[ta->index]; // maybe how you do it?????
+      ta->sh->global_count += ta->sh->local_buckets[ta->index];
       ta->sh->local_buckets[ta->index] = 0;
       sem_post(&(ta->sh->mutex));
     }
   }
-  return  nullptr; //I HAVE NO CLUE WHAT THIS IS SUPPOSED TO RETURN
+  return  nullptr;
 
 }
 
